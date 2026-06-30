@@ -9,6 +9,10 @@ public class GameUIController : MonoBehaviour
     public static GameUIController Instance { get; private set; }
 
     private GameObject pausePanel;
+    private GameObject nosButton;
+    private TextMeshProUGUI nosButtonText;
+    private Image nosButtonImage;
+    private bool isInLevel;
 
     private void Awake()
     {
@@ -25,6 +29,7 @@ public class GameUIController : MonoBehaviour
 
     public void SetupUIForScene(string sceneName, Canvas canvas)
     {
+        CleanupLevelUI();
         if (canvas == null) return;
 
         if (sceneName == "Level1" || sceneName == "Level2")
@@ -62,6 +67,11 @@ public class GameUIController : MonoBehaviour
 
         // Create Pause Panel (Hidden initially)
         CreatePausePanel(canvas.transform);
+
+        // Create NOS Button
+        isInLevel = true;
+        CreateNosButton(canvas.transform);
+        StartCoroutine(UpdateNosButtonRoutine());
     }
 
     private void CreatePausePanel(Transform parent)
@@ -109,14 +119,112 @@ public class GameUIController : MonoBehaviour
             StopAllCoroutines();
             StartCoroutine(ScaleClose(pausePanel.transform));
         }
+        if (isInLevel)
+        {
+            StartCoroutine(UpdateNosButtonRoutine());
+        }
+    }
+    #endregion
+
+    #region NOS System
+    private void CleanupLevelUI()
+    {
+        isInLevel = false;
+        StopAllCoroutines();
+        nosButton = null;
+        nosButtonText = null;
+        nosButtonImage = null;
+    }
+
+    private void CreateNosButton(Transform parent)
+    {
+        nosButton = CreateButton(parent, "NOSButton", "NOS", new Vector2(80, 80), new Vector2(-30, 0), () =>
+        {
+            CarController car = FindObjectOfType<CarController>();
+            if (car != null) car.ActivateNos();
+        });
+
+        RectTransform rect = nosButton.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1, 0.5f);
+        rect.anchorMax = new Vector2(1, 0.5f);
+        rect.pivot = new Vector2(1, 0.5f);
+
+        nosButtonText = nosButton.GetComponentInChildren<TextMeshProUGUI>();
+        nosButtonText.fontSize = 22;
+
+        nosButtonImage = nosButton.GetComponent<Image>();
+    }
+
+    private IEnumerator UpdateNosButtonRoutine()
+    {
+        while (isInLevel)
+        {
+            CarController car = FindObjectOfType<CarController>();
+            if (car != null && nosButtonImage != null && nosButtonText != null)
+            {
+                if (car.IsNosActive())
+                {
+                    nosButtonText.text = "NOS";
+                    nosButtonText.color = Color.white;
+                    nosButtonImage.color = new Color(1f, 0.2f, 0.2f, 1f);
+                    nosButton.transform.localScale = Vector3.one * 1.1f;
+                }
+                else if (car.IsNosReady())
+                {
+                    nosButtonText.text = "NOS";
+                    nosButtonText.color = Color.white;
+                    nosButtonImage.color = new Color(1f, 0.6f, 0f, 1f);
+                    nosButton.transform.localScale = Vector3.one;
+                }
+                else
+                {
+                    float remaining = car.GetCooldownRemaining();
+                    nosButtonText.text = Mathf.CeilToInt(remaining).ToString() + "s";
+                    nosButtonText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+                    nosButtonImage.color = new Color(0.2f, 0.2f, 0.25f, 0.6f);
+                    nosButton.transform.localScale = Vector3.one;
+                }
+            }
+            yield return new WaitForSecondsRealtime(0.15f);
+        }
     }
     #endregion
 
     #region Win Scene UI Setup
     private void SetupWinSceneUI(Canvas canvas)
     {
-        // Create Back to Main Menu Button at the bottom center
-        CreateButton(canvas.transform, "BackToMenuButton", "KEMBALI KE MENU", new Vector2(280, 55), new Vector2(0, -150), () =>
+        string completedLevel = PlayerPrefs.GetString("CompletedLevel", "");
+
+        Color neonCyan = new Color(0.00f, 0.88f, 1.00f, 1f);
+
+        // Dark overlay background (stretch to fill canvas)
+        GameObject bg = CreatePanel(canvas.transform, "WinBackground", Vector2.zero, new Color(0.05f, 0.06f, 0.10f, 0.95f));
+        RectTransform bgRect = bg.GetComponent<RectTransform>();
+        bgRect.anchorMin = Vector2.zero;
+        bgRect.anchorMax = Vector2.one;
+        bgRect.sizeDelta = Vector2.zero;
+
+        // YOU WIN Title
+        CreateText(canvas.transform, "YOU WIN", 48, new Color(1f, 0.84f, 0f, 1f), TextAlignmentOptions.Center, new Vector2(0, 120));
+
+        // Subtitle: completed level
+        CreateText(canvas.transform, "LEVEL " + (completedLevel == "Level2" ? "2" : "1") + " SELESAI!", 22, neonCyan, TextAlignmentOptions.Center, new Vector2(0, 70));
+
+        // Neon header strip below title
+        CreatePanel(canvas.transform, "WinHeaderStrip", new Vector2(300, 4), neonCyan)
+            .GetComponent<RectTransform>().anchoredPosition = new Vector2(0, 40);
+
+        // Continue to Level 2 button (only if just finished Level 1)
+        if (completedLevel == "Level1")
+        {
+            CreateButton(canvas.transform, "NextLevelButton", "LANJUT LEVEL DUA", new Vector2(280, 55), new Vector2(0, -20), () =>
+            {
+                SceneManager.LoadScene("Level2");
+            });
+        }
+
+        // Back to Main Menu button
+        CreateButton(canvas.transform, "BackToMenuButton", "BALIK KE MAIN MENU", new Vector2(280, 55), new Vector2(0, completedLevel == "Level1" ? -90 : -40), () =>
         {
             SceneManager.LoadScene("MainMenu");
         });

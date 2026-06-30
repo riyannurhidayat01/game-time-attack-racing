@@ -9,7 +9,8 @@ public class FinishLine : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            SceneManager.LoadScene(nextScene);
+            PlayerPrefs.SetString("CompletedLevel", SceneManager.GetActiveScene().name);
+            SceneManager.LoadScene("WinScene");
         }
     }
 }
